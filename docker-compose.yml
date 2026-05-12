@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    container_name: transcription_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./storage:/app/storage
+    environment:
+      - WHISPER_MODEL=small
+      - DEVICE=cpu
+      - COMPUTE_TYPE=int8
+
+  frontend:
+    build: ./frontend
+    container_name: transcription_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:8000
