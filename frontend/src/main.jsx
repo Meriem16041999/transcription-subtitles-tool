@@ -211,6 +211,9 @@ function App() {
               <a href={`${API_URL}/download/${jobId}/json`}>
                 <Download size={16} /> JSON
               </a>
+              <a href={`${API_URL}/download/${jobId}/video-subtitled`}>
+              <Download size={16} /> Vidéo sous-titrée
+              </a>
 
               {Object.keys(translatedFiles).map((lang) => (
                 <a key={lang} href={`${API_URL}/download/${jobId}/srt/${lang}`}>

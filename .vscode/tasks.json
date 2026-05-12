@@ -1,0 +1,26 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Setup local sans Docker",
+      "type": "shell",
+      "command": "./setup_local.sh",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Lancer backend FastAPI",
+      "type": "shell",
+      "command": "./run_backend.sh",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Lancer frontend React",
+      "type": "shell",
+      "command": "./run_frontend.sh",
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

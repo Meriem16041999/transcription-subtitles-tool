@@ -213,3 +213,16 @@ def download_translated_srt(job_id: str, lang: str):
         media_type="application/x-subrip",
         filename=f"subtitles_{lang}.srt",
     )
+
+@app.get("/download/{job_id}/video-subtitled")
+def download_video_subtitled(job_id: str):
+    output_path = RESULT_DIR / job_id / "video_subtitled.mp4"
+
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="Video subtitled not found")
+
+    return FileResponse(
+        output_path,
+        media_type="video/mp4",
+        filename="video_subtitled.mp4",
+    )

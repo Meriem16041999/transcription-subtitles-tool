@@ -116,6 +116,34 @@ def transcribe_file(
     srt = segments_to_srt(segments)
 
     write_txt_with_timestamps(segments, txt_path)
+   
+    subtitled_video_path = result_dir / "video_subtitled.mp4"
+
+    command = [
+    "ffmpeg",
+    "-y",
+    "-i",
+    str(input_path),
+    "-vf",
+    "subtitles=filename=subtitles.srt",
+    "-c:a",
+    "copy",
+    str(subtitled_video_path),
+]
+
+    process = subprocess.run(
+    command,
+    cwd=str(result_dir),
+    stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE,
+    text=True,
+)
+
+    if process.returncode != 0:
+        print("FFMPEG STDOUT:", process.stdout)
+        print("FFMPEG STDERR:", process.stderr)
+    raise RuntimeError(process.stderr)
+
     srt_path.write_text(srt, encoding="utf-8")
     json_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -149,4 +177,5 @@ def transcribe_file(
         "json_file": str(json_path),
         "translated_files": translated_files,
         "dub_files": dub_files,
+        "subtitled_video_file": str(subtitled_video_path),
     }

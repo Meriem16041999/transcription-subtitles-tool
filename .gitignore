@@ -4,5 +4,4 @@ __pycache__/
 storage/
 *.wav
 *.mp4
-*.json
 .env
