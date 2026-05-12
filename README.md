@@ -1,108 +1,137 @@
-# Outil interne de transcription et sous-titres - sans Docker
+# 🎬 Transcription & Sous-titres Tool
 
-Projet MVP pret a ouvrir dans Visual Studio Code.
+Outil interne pour :
+- 🎤 Transcription audio / vidéo
+- 📝 Génération de sous-titres (SRT)
+- 🌍 Traduction multilingue
+- ✏️ Édition interactive des sous-titres
+- 🎯 Synchronisation texte ↔ vidéo
 
-## Fonctionnalites
+---
 
-- Upload video ou audio
-- Extraction audio avec FFmpeg
-- Transcription avec faster-whisper
-- Generation TXT, SRT et JSON
-- API FastAPI
-- Interface web React/Vite
-- Lancement local sans Docker
+## 🚀 Fonctionnalités
 
-## Prerequis
+- Upload vidéo ou audio
+- Transcription avec Whisper
+- Export :
+  - TXT
+  - SRT
+  - JSON
+- Sous-titres multilingues (EN, ES, AR…)
+- Édition des segments directement dans l’interface
+- Navigation vidéo via la transcription
 
-Installe sur ton ordinateur :
+---
 
-1. Python 3.10 ou 3.11
-2. Node.js LTS
-3. FFmpeg
-4. Visual Studio Code
+## 🧰 Stack technique
 
-### Installer FFmpeg sur Mac
+**Backend**
+- FastAPI
+- faster-whisper
+- FFmpeg
 
-Avec Homebrew :
+**Frontend**
+- React + Vite
+
+---
+
+## ⚙️ Installation
+
+### 1. Cloner le projet
+
+```bash
+git clone https://github.com/Meriem16041999/transcription-subtitles-tool.git
+cd transcription-subtitles-tool
+```
+
+### 2. Backend
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+```
+
+Installer FFmpeg :
 
 ```bash
 brew install ffmpeg
 ```
 
-Verifier :
+### 3. Frontend
 
 ```bash
-ffmpeg -version
+cd frontend
+npm install
+cd ..
 ```
 
-## Installation locale
+---
 
-Depuis le dossier du projet :
+## ▶️ Lancer l’application
 
-```bash
-./setup_local.sh
-```
-
-## Lancer le backend
-
-Dans un premier terminal :
+### Backend
 
 ```bash
 ./run_backend.sh
 ```
 
-API : http://localhost:8000/docs
+ou :
 
-## Lancer le frontend
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
 
-Dans un deuxieme terminal :
+### Frontend
 
 ```bash
 ./run_frontend.sh
 ```
 
-Frontend : http://localhost:5173
-
-## Utilisation dans VS Code
-
-1. Ouvre le dossier `transcription-subtitles-tool` dans VS Code.
-2. Ouvre le terminal integre.
-3. Lance `./setup_local.sh` une seule fois.
-4. Lance `./run_backend.sh`.
-5. Ouvre un deuxieme terminal et lance `./run_frontend.sh`.
-
-Tu peux aussi utiliser `Terminal > Run Task` :
-
-- Setup local sans Docker
-- Lancer backend FastAPI
-- Lancer frontend React
-
-## Configuration du modele
-
-Par defaut, le projet utilise :
+ou :
 
 ```bash
-WHISPER_MODEL=small
-DEVICE=cpu
-COMPUTE_TYPE=int8
+cd frontend
+npm run dev
 ```
 
-Pour une meilleure qualite :
+---
 
-```bash
-WHISPER_MODEL=medium ./run_backend.sh
-```
+## 🌐 Accès
 
-Pour un Mac Apple Silicon, tu peux rester en CPU. Le premier lancement telecharge le modele Whisper, donc il peut etre lent.
+- Frontend : http://localhost:5173  
+- API : http://localhost:8000/docs  
 
-## Structure
+---
+
+## 📦 Structure du projet
 
 ```text
-backend/       API FastAPI + transcription
-frontend/      Interface React
-storage/       fichiers uploads et resultats
-.vscode/       configuration VS Code
-setup_local.sh installation locale
-run_backend.sh lancement API
-run_frontend.sh lancement interface
+backend/
+  app/
+    main.py
+    transcriber.py
+    translator.py
+frontend/
+storage/
+  uploads/
+  results/
 ```
+
+---
+
+## 🧠 Améliorations futures
+
+- Authentification interne
+- Jobs asynchrones
+- Interface édition avancée
+- Amélioration qualité traduction
+- Support multi-speakers
+- Export pour Premiere / Avid
+
+---
+
+## 👤 Auteur
+
+Meriem Boussaadia
