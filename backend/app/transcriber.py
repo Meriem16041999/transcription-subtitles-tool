@@ -4,9 +4,7 @@ import subprocess
 from pathlib import Path
 
 from faster_whisper import WhisperModel
-
 from app.srt import segments_to_srt
-from app.voice_clone import generate_cloned_dub 
 
 MODEL_NAME = os.getenv("WHISPER_MODEL", "small")
 DEVICE = os.getenv("DEVICE", "cpu")
@@ -55,18 +53,75 @@ def format_time(seconds: float) -> str:
     return f"{hours:02}:{minutes:02}:{secs:02},{ms:03}"
 
 
+# ✅ FUSION SEGMENTS POUR TXT
+def merge_segments_for_txt(segments, max_gap=0.3, max_duration=15):
+    if not segments:
+        return []
+
+    merged = []
+    current = segments[0].copy()
+
+    for segment in segments[1:]:
+        same_speaker = segment.get("speaker") == current.get("speaker")
+        gap = segment["start"] - current["end"]
+        duration = segment["end"] - current["start"]
+
+        if same_speaker and gap <= max_gap and duration <= max_duration:
+            current["end"] = segment["end"]
+            current["text"] = current["text"].strip() + " " + segment["text"].strip()
+        else:
+            merged.append(current)
+            current = segment.copy()
+
+    merged.append(current)
+    return merged
+
+
 def write_txt_with_timestamps(segments, output_path: Path) -> None:
+    merged_segments = merge_segments_for_txt(segments)
+
     with output_path.open("w", encoding="utf-8") as f:
-        for segment in segments:
+        for segment in merged_segments:
             start = format_time(segment["start"])
             end = format_time(segment["end"])
-            speaker = segment.get("speaker", "Speaker 0")
+            speaker = segment.get("speaker", "Speaker_0")
             text = segment["text"].strip()
 
             f.write(f"{start} --> {end} [{speaker}]\n")
             f.write(f"{text}\n\n")
 
 
+# ✅ DIARISATION
+def get_diarization(audio_path: Path):
+    hf_token = os.getenv("HF_TOKEN")
+
+    if not hf_token:
+        raise RuntimeError("HF_TOKEN manquant pour la diarisation")
+
+    from pyannote.audio import Pipeline
+
+    pipeline = Pipeline.from_pretrained(
+        "pyannote/speaker-diarization-3.1",
+        revision="main",
+        token=hf_token,
+    )
+
+    return pipeline(str(audio_path))
+
+
+def find_speaker(diarization, start: float, end: float) -> str:
+    mid = (start + end) / 2
+
+    speaker_tracks = getattr(diarization, "speaker_diarization", diarization)
+
+    for turn, _, speaker in speaker_tracks.itertracks(yield_label=True):
+        if turn.start <= mid <= turn.end:
+            return speaker
+
+    return "Speaker_0"
+
+
+# 🔥 FONCTION PRINCIPALE
 def transcribe_file(
     input_path: Path,
     result_dir: Path,
@@ -74,13 +129,16 @@ def transcribe_file(
     make_translation: bool = False,
     make_dubbing: bool = False,
     target_languages: list[str] | None = None,
+    status_callback=None,
 ) -> dict:
-    result_dir.mkdir(parents=True, exist_ok=True)
 
+    result_dir.mkdir(parents=True, exist_ok=True)
     target_languages = target_languages or []
 
     audio_path = result_dir / "audio.wav"
-    extract_audio(input_path, audio_path)
+    if status_callback:
+     status_callback("Extraction audio")
+     extract_audio(input_path, audio_path)
 
     model = get_model()
 
@@ -90,21 +148,29 @@ def transcribe_file(
         vad_filter=False,
         beam_size=5,
     )
-
+    if status_callback:
+     status_callback("Transcription")
     whisper_segments = list(segments_iterator)
 
     print("NOMBRE DE SEGMENTS WHISPER =", len(whisper_segments))
-    for s in whisper_segments[:10]:
-        print(s.start, s.end, s.text)
+
+    # 🔥 DIARISATION (OBLIGATOIRE)
+    diarization = get_diarization(audio_path)
 
     segments = []
 
     for segment in whisper_segments:
+        start = float(segment.start)
+        end = float(segment.end)
+        if status_callback:
+         status_callback("Détection des interlocuteurs")
+        speaker = find_speaker(diarization, start, end)
+
         segments.append(
             {
-                "start": float(segment.start),
-                "end": float(segment.end),
-                "speaker": "Spe aker 0",
+                "start": start,
+                "end": end,
+                "speaker": speaker,
                 "text": segment.text.strip(),
             }
         )
@@ -116,39 +182,12 @@ def transcribe_file(
     srt = segments_to_srt(segments)
 
     write_txt_with_timestamps(segments, txt_path)
-   
-    subtitled_video_path = result_dir / "video_subtitled.mp4"
-
-    command = [
-    "ffmpeg",
-    "-y",
-    "-i",
-    str(input_path),
-    "-vf",
-    "subtitles=filename=subtitles.srt",
-    "-c:a",
-    "copy",
-    str(subtitled_video_path),
-]
-
-    process = subprocess.run(
-    command,
-    cwd=str(result_dir),
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    text=True,
-)
-
-    if process.returncode != 0:
-        print("FFMPEG STDOUT:", process.stdout)
-        print("FFMPEG STDERR:", process.stderr)
-    raise RuntimeError(process.stderr)
-
     srt_path.write_text(srt, encoding="utf-8")
     json_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
 
     translated_files = {}
-
+    if status_callback:
+     status_callback("Traduction")
     if make_translation:
         from app.translator import translate_segments
 
@@ -161,10 +200,6 @@ def transcribe_file(
 
             translated_files[lang] = str(translated_path)
 
-    dub_files = {}
-
- 
-
     if audio_path.exists():
         audio_path.unlink()
 
@@ -176,6 +211,4 @@ def transcribe_file(
         "srt_file": str(srt_path),
         "json_file": str(json_path),
         "translated_files": translated_files,
-        "dub_files": dub_files,
-        "subtitled_video_file": str(subtitled_video_path),
     }

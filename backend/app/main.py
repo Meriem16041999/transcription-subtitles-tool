@@ -4,12 +4,14 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from sqlmodel import select
 
-from app.transcriber import transcribe_file
+from app.database import Job, get_session, init_db
 from app.srt import segments_to_srt
+from app.transcriber import transcribe_file
 
 DEFAULT_STORAGE = Path(__file__).resolve().parents[2] / "storage"
 BASE_DIR = Path(os.getenv("STORAGE_DIR", str(DEFAULT_STORAGE))).resolve()
@@ -32,6 +34,23 @@ app.add_middleware(
 JOBS: dict[str, dict] = {}
 
 
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
+def update_job_status(job_id: str, status: str):
+    if job_id in JOBS:
+        JOBS[job_id]["status"] = status
+
+    with get_session() as session:
+        job_db = session.get(Job, job_id)
+        if job_db:
+            job_db.status = status
+            session.add(job_db)
+            session.commit()
+
+
 def format_time(seconds: float) -> str:
     milliseconds = int(seconds * 1000)
     hours = milliseconds // 3600000
@@ -48,11 +67,62 @@ def write_txt_with_timestamps(segments: list, txt_path: Path) -> None:
         for segment in segments:
             start = format_time(float(segment["start"]))
             end = format_time(float(segment["end"]))
-            speaker = segment.get("speaker", "Speaker 0")
+            speaker = segment.get("speaker", "Speaker_0")
             text = segment["text"].strip()
 
             f.write(f"{start} --> {end} [{speaker}]\n")
             f.write(f"{text}\n\n")
+
+
+def run_transcription_job(
+    job_id: str,
+    input_path: Path,
+    job_result_dir: Path,
+    language: str,
+    make_translation: bool,
+    make_dubbing: bool,
+    languages: list[str],
+    filename: str,
+):
+    try:
+        result = transcribe_file(
+            input_path=input_path,
+            result_dir=job_result_dir,
+            language=language,
+            make_translation=make_translation,
+            make_dubbing=make_dubbing,
+            target_languages=languages,
+            status_callback=lambda status: update_job_status(job_id, status),
+        )
+
+        JOBS[job_id] = {
+            "status": "Terminé",
+            "filename": filename,
+            "result": result,
+        }
+
+        with get_session() as session:
+            job_db = session.get(Job, job_id)
+            if job_db:
+                job_db.status = "Terminé"
+                job_db.language = result.get("language")
+                job_db.duration = result.get("duration")
+                session.add(job_db)
+                session.commit()
+
+    except Exception as exc:
+        JOBS[job_id] = {
+            "status": "Erreur",
+            "filename": filename,
+            "error": str(exc),
+        }
+
+        with get_session() as session:
+            job_db = session.get(Job, job_id)
+            if job_db:
+                job_db.status = "Erreur"
+                session.add(job_db)
+                session.commit()
 
 
 @app.get("/health")
@@ -62,6 +132,7 @@ def health():
 
 @app.post("/transcribe")
 def transcribe(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     language: str = "fr",
     make_translation: bool = Form(False),
@@ -72,6 +143,7 @@ def transcribe(
     extension = Path(file.filename or "media").suffix or ".mp4"
     input_path = UPLOAD_DIR / f"{job_id}{extension}"
     job_result_dir = RESULT_DIR / job_id
+    filename = file.filename or "media"
 
     try:
         languages = json.loads(target_languages)
@@ -84,43 +156,68 @@ def transcribe(
         shutil.copyfileobj(file.file, buffer)
 
     JOBS[job_id] = {
-        "status": "processing",
-        "filename": file.filename,
+        "status": "En attente",
+        "filename": filename,
     }
 
-    try:
-        result = transcribe_file(
-            input_path=input_path,
-            result_dir=job_result_dir,
-            language=language,
-            make_translation=make_translation,
-            make_dubbing=make_dubbing,
-            target_languages=languages,
-        )
+    with get_session() as session:
+        session.add(Job(id=job_id, filename=filename, status="En attente"))
+        session.commit()
 
-        JOBS[job_id] = {
-            "status": "done",
-            "filename": file.filename,
-            "result": result,
-        }
+    background_tasks.add_task(
+        run_transcription_job,
+        job_id,
+        input_path,
+        job_result_dir,
+        language,
+        make_translation,
+        make_dubbing,
+        languages,
+        filename,
+    )
 
-        return {"job_id": job_id, **JOBS[job_id]}
+    return {
+        "job_id": job_id,
+        "status": "En attente",
+        "filename": filename,
+    }
 
-    except Exception as exc:
-        JOBS[job_id] = {
-            "status": "error",
-            "filename": file.filename,
-            "error": str(exc),
-        }
-        raise HTTPException(status_code=500, detail=str(exc))
+
+@app.get("/jobs")
+def list_jobs():
+    with get_session() as session:
+        jobs = session.exec(select(Job).order_by(Job.created_at.desc())).all()
+
+        return [
+            {
+                "job_id": job.id,
+                "filename": job.filename,
+                "status": job.status,
+                "duration": job.duration,
+                "language": job.language,
+                "created_at": job.created_at.isoformat(),
+            }
+            for job in jobs
+        ]
 
 
 @app.get("/jobs/{job_id}")
 def get_job(job_id: str):
-    if job_id not in JOBS:
-        raise HTTPException(status_code=404, detail="Job not found")
+    if job_id in JOBS:
+        return JOBS[job_id]
 
-    return JOBS[job_id]
+    with get_session() as session:
+        job_db = session.get(Job, job_id)
+        if not job_db:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        return {
+            "job_id": job_db.id,
+            "filename": job_db.filename,
+            "status": job_db.status,
+            "duration": job_db.duration,
+            "language": job_db.language,
+        }
 
 
 @app.post("/jobs/{job_id}/update")
@@ -143,7 +240,7 @@ def update_segments(job_id: str, segments: list = Body(...)):
     srt = segments_to_srt(segments)
     srt_path.write_text(srt, encoding="utf-8")
 
-    if job_id in JOBS:
+    if job_id in JOBS and "result" in JOBS[job_id]:
         JOBS[job_id]["result"]["segments"] = segments
 
     return {"status": "saved"}
@@ -212,17 +309,4 @@ def download_translated_srt(job_id: str, lang: str):
         path,
         media_type="application/x-subrip",
         filename=f"subtitles_{lang}.srt",
-    )
-
-@app.get("/download/{job_id}/video-subtitled")
-def download_video_subtitled(job_id: str):
-    output_path = RESULT_DIR / job_id / "video_subtitled.mp4"
-
-    if not output_path.exists():
-        raise HTTPException(status_code=404, detail="Video subtitled not found")
-
-    return FileResponse(
-        output_path,
-        media_type="video/mp4",
-        filename="video_subtitled.mp4",
     )

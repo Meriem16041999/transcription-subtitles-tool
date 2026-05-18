@@ -277,3 +277,84 @@ video {
   border: 2px solid #2563eb;
   background: #eff6ff;
 }
+.segmentTop {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.speakerInput {
+  width: 120px;
+  border: 1px solid #cbd5e1;
+  background: white;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-weight: 900;
+  color: #1d4ed8;
+}
+
+.speakerInput:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.searchInput {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 14px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.historyList {
+  display: grid;
+  gap: 12px;
+}
+
+.historyItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #f9fafb;
+}
+
+.historyItem p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.topNav {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.topNav a {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  text-decoration: none;
+  font-weight: 800;
+  color: #111827;
+}
+
+.jobStatus {
+  font-weight: 900;
+  color: #2563eb;
+  margin-bottom: 14px;
+}

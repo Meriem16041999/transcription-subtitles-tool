@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Upload, FileText, Download } from 'lucide-react';
 import './styles.css';
+ 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -11,7 +12,8 @@ const AVAILABLE_LANGUAGES = [
   { code: 'ar', label: 'Arabe' },
 ];
 
-function App() {
+function HomePage() {
+  const [page, setPage] = useState('home');
   const [file, setFile] = useState(null);
   const [language, setLanguage] = useState('fr');
   const [loading, setLoading] = useState(false);
@@ -19,7 +21,8 @@ function App() {
   const [error, setError] = useState('');
   const [makeTranscription, setMakeTranscription] = useState(true);
   const [makeTranslation, setMakeTranslation] = useState(false);
-
+  const [jobs, setJobs] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [targetLanguages, setTargetLanguages] = useState(['en']);
 
   const videoRef = useRef(null);
@@ -50,6 +53,48 @@ function App() {
     });
   }
 
+ async function loadJobs() {
+  const response = await fetch(`${API_URL}/jobs`);
+  const data = await response.json();
+  setJobs(data);
+}
+useEffect(() => {
+  if (!job?.job_id) return;
+
+  const interval = setInterval(async () => {
+    const response = await fetch(`${API_URL}/jobs/${job.job_id}`);
+    const data = await response.json();
+
+    setJob((previous) => ({
+      ...previous,
+      status: data.status,
+    }));
+  }, 2000);
+
+  return () => clearInterval(interval);
+}, [job?.job_id]);
+
+useEffect(() => {
+  loadJobs();
+}, []); 
+  function updateSegmentSpeaker(index, newSpeaker) {
+  setJob((previousJob) => {
+    const updatedSegments = [...previousJob.result.segments];
+
+    updatedSegments[index] = {
+      ...updatedSegments[index],
+      speaker: newSpeaker,
+    };
+
+    return {
+      ...previousJob,
+      result: {
+        ...previousJob.result,
+        segments: updatedSegments,
+      },
+    };
+  });
+}
   async function saveEdits() {
   if (!jobId) return;
 
@@ -104,6 +149,7 @@ function App() {
 
     const data = await response.json();
     setJob(data);
+    loadJobs();
   } catch (err) {
     setError(err.message);
   } finally {
@@ -115,9 +161,47 @@ function App() {
   const segments = job?.result?.segments || [];
   const translatedFiles = job?.result?.translated_files || {};
   const dubFiles = job?.result?.dub_files || {};
-
+  const filteredSegments = segments.filter((segment) =>
+  segment.text.toLowerCase().includes(searchQuery.toLowerCase())
+);
   return (
     <main className="page">
+    <nav className="topNav">
+  <button type="button" onClick={() => setPage('home')}>
+    Nouvelle transcription
+  </button>
+
+  <button type="button" onClick={() => setPage('history')}>
+    Historique
+  </button>
+</nav>
+{page === 'history' && (
+  <section className="card">
+    <h2>Historique des projets</h2>
+
+    <div className="historyList">
+      {jobs.map((item) => (
+        <div key={item.job_id} className="historyItem">
+          <div>
+            <strong>{item.filename}</strong>
+            <p>
+              {item.status} · {item.language || '—'} ·{' '}
+              {item.duration ? `${Math.round(item.duration)}s` : '—'}
+            </p>
+          </div>
+
+          <div className="downloads">
+            <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
+            <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
+            <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+)}
+      {page === 'home' && (
+  <>
       <section className="hero">
         <p className="eyebrow">Outil interne</p>
         <h1>Transcription, sous-titres et doublage</h1>
@@ -190,7 +274,26 @@ function App() {
             </div>
           </div>
         </form>
+        <section className="card">
+  <h2>Historique des projets</h2>
 
+  <div className="historyList">
+    {jobs.map((item) => (
+      <div key={item.job_id} className="historyItem">
+        <div>
+          <strong>{item.filename}</strong>
+          <p>{item.status} · {item.language || '—'} · {item.duration ? `${Math.round(item.duration)}s` : '—'}</p>
+        </div>
+
+        <div className="downloads">
+          <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
+          <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
+          <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
+        </div>
+      </div>
+    ))}
+  </div>
+</section>
         {error && <p className="error">{error}</p>}
       </section>
 
@@ -198,7 +301,9 @@ function App() {
         <section className="card result">
           <div className="resultHeader">
             <h2>{job.filename}</h2>
-
+            <p className="jobStatus">
+  Statut : {job.status}
+</p>
             <div className="downloads">
               <a href={`${API_URL}/download/${jobId}/txt`}>
                 <Download size={16} /> TXT
@@ -211,9 +316,7 @@ function App() {
               <a href={`${API_URL}/download/${jobId}/json`}>
                 <Download size={16} /> JSON
               </a>
-              <a href={`${API_URL}/download/${jobId}/video-subtitled`}>
-              <Download size={16} /> Vidéo sous-titrée
-              </a>
+              
 
               {Object.keys(translatedFiles).map((lang) => (
                 <a key={lang} href={`${API_URL}/download/${jobId}/srt/${lang}`}>
@@ -240,9 +343,15 @@ function App() {
            style={{ width: '100%', marginBottom: '20px' }}
             />
           )}
-
+          <input
+  className="searchInput"
+  type="text"
+  placeholder="Rechercher dans la transcription..."
+  value={searchQuery}
+  onChange={(e) => setSearchQuery(e.target.value)}
+/>
           <div className="segments">
-            {segments.map((segment, index) => (
+            {filteredSegments.map((segment, index) => (
                <article
                   key={index}
                   className={`segment ${
@@ -253,9 +362,18 @@ function App() {
             onClick={() => seekTo(segment.start)}
             style={{ cursor: 'pointer' }}
                 >
-                <span>
-                  {segment.start.toFixed(2)}s → {segment.end.toFixed(2)}s
-                </span>
+                 <div className="segmentTop">
+  <input
+    className="speakerInput"
+    value={segment.speaker || "Speaker_0"}
+    onChange={(e) => updateSegmentSpeaker(index, e.target.value)}
+    onClick={(e) => e.stopPropagation()}
+  />
+
+  <span>
+    {segment.start.toFixed(2)}s → {segment.end.toFixed(2)}s
+  </span>
+</div>
 
                 <div className="editableLine">
                   <FileText size={16} />
@@ -271,8 +389,11 @@ function App() {
           </div>
         </section>
       )}
+      </>
+)}
     </main>
   );
 }
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<HomePage />);
+
