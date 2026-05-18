@@ -4,4 +4,6 @@ __pycache__/
 storage/
 *.wav
 *.mp4
-.env
+.envfrontend/dist/
+frontend/dist/
+frontend/dist/
