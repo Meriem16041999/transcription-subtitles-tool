@@ -24,7 +24,7 @@ function HomePage() {
   const [jobs, setJobs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [targetLanguages, setTargetLanguages] = useState(['en']);
-
+  const [tcIn, setTcIn] = useState('00:00:00:00');
   const videoRef = useRef(null);
 
   function seekTo(seconds) {
@@ -149,6 +149,7 @@ async function deleteJob(jobId) {
   formData.append('make_transcription', String(makeTranscription));
   formData.append('make_translation', String(makeTranslation));
   formData.append('target_languages', JSON.stringify(targetLanguages));
+  formData.append('tc_in', tcIn);
 
   try {
     const response = await fetch(`${API_URL}/transcribe?language=${language}`, {
@@ -272,9 +273,15 @@ async function deleteJob(jobId) {
               />
               Générer les sous-titres multilingues
             </label>
-
-             
-
+            <label>
+  TC IN
+  <input
+    type="text"
+    value={tcIn}
+    onChange={(e) => setTcIn(e.target.value)}
+    placeholder="01:00:00:00"
+  />
+</label>
             <div className="languageChoices">
               <span>Langues cibles</span>
 

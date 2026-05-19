@@ -130,6 +130,7 @@ def transcribe_file(
     make_dubbing: bool = False,
     target_languages: list[str] | None = None,
     status_callback=None,
+    tc_in: str = "00:00:00:00",
 ) -> dict:
 
     result_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +182,7 @@ def transcribe_file(
 
     srt = segments_to_srt(segments)
 
-    write_txt_with_timestamps(segments, txt_path)
+    write_txt_with_timestamps(segments, txt_path, tc_in=tc_in)
     srt_path.write_text(srt, encoding="utf-8")
     json_path.write_text(json.dumps(segments, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -212,3 +213,29 @@ def transcribe_file(
         "json_file": str(json_path),
         "translated_files": translated_files,
     }
+def tc_to_seconds(tc: str, fps: int = 25) -> float:
+    parts = tc.strip().replace(";", ":").split(":")
+    if len(parts) == 4:
+        hours, minutes, seconds, frames = map(int, parts)
+        return hours * 3600 + minutes * 60 + seconds + frames / fps
+    if len(parts) == 3:
+        hours, minutes, seconds = map(int, parts)
+        return hours * 3600 + minutes * 60 + seconds
+    return 0.0
+
+
+def format_time_with_offset(seconds: float, offset: float) -> str:
+    return format_time(seconds + offset)
+def write_txt_with_timestamps(segments, output_path: Path, tc_in: str = "00:00:00:00") -> None:
+    offset = tc_to_seconds(tc_in)
+    merged_segments = merge_segments_for_txt(segments)
+
+    with output_path.open("w", encoding="utf-8") as f:
+        for segment in merged_segments:
+            start = format_time_with_offset(segment["start"], offset)
+            end = format_time_with_offset(segment["end"], offset)
+            speaker = segment.get("speaker", "Speaker_0")
+            text = segment["text"].strip()
+
+            f.write(f"{start} --> {end} [{speaker}]\n")
+            f.write(f"{text}\n\n")

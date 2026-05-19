@@ -3,7 +3,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-import shutil
+
 from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -82,6 +82,7 @@ def run_transcription_job(
     make_translation: bool,
     make_dubbing: bool,
     languages: list[str],
+    tc_in: str,
     filename: str,
 ):
     try:
@@ -93,9 +94,11 @@ def run_transcription_job(
             make_dubbing=make_dubbing,
             target_languages=languages,
             status_callback=lambda status: update_job_status(job_id, status),
+            tc_in=tc_in,
         )
 
         JOBS[job_id] = {
+            "job_id": job_id,
             "status": "Terminé",
             "filename": filename,
             "result": result,
@@ -111,21 +114,22 @@ def run_transcription_job(
                 session.commit()
 
     except Exception as exc:
-     print("ERREUR JOB:", str(exc))
+        error_message = str(exc)
+        print("ERREUR JOB:", error_message)
 
-    JOBS[job_id] = {
-        "status": "Erreur",
-        "filename": filename,
-        "error": str(exc),
-    }
+        JOBS[job_id] = {
+            "job_id": job_id,
+            "status": "Erreur",
+            "filename": filename,
+            "error": error_message,
+        }
 
-    with get_session() as session:
-        job_db = session.get(Job, job_id)
-
-        if job_db:
-            job_db.status = "Erreur"
-            session.add(job_db)
-            session.commit()
+        with get_session() as session:
+            job_db = session.get(Job, job_id)
+            if job_db:
+                job_db.status = "Erreur"
+                session.add(job_db)
+                session.commit()
 
 
 @app.get("/health")
@@ -141,6 +145,7 @@ def transcribe(
     make_translation: bool = Form(False),
     make_dubbing: bool = Form(False),
     target_languages: str = Form("[]"),
+    tc_in: str = Form("00:00:00:00"),
 ):
     job_id = str(uuid.uuid4())
     extension = Path(file.filename or "media").suffix or ".mp4"
@@ -159,9 +164,9 @@ def transcribe(
         shutil.copyfileobj(file.file, buffer)
 
     JOBS[job_id] = {
-           "job_id": job_id,
-    "status": "En attente",
-    "filename": filename,
+        "job_id": job_id,
+        "status": "En attente",
+        "filename": filename,
     }
 
     with get_session() as session:
@@ -177,6 +182,7 @@ def transcribe(
         make_translation,
         make_dubbing,
         languages,
+        tc_in,
         filename,
     )
 
@@ -250,71 +256,6 @@ def update_segments(job_id: str, segments: list = Body(...)):
     return {"status": "saved"}
 
 
-@app.get("/media/{job_id}")
-def media(job_id: str):
-    matches = list(UPLOAD_DIR.glob(f"{job_id}.*"))
-
-    if not matches:
-        raise HTTPException(status_code=404, detail="Media not found")
-
-    return FileResponse(matches[0])
-
-
-@app.get("/download/{job_id}/txt")
-def download_txt(job_id: str):
-    path = RESULT_DIR / job_id / "transcription.txt"
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="TXT not found")
-
-    return FileResponse(
-        path,
-        media_type="text/plain",
-        filename="transcription.txt",
-    )
-
-
-@app.get("/download/{job_id}/srt")
-def download_srt(job_id: str):
-    path = RESULT_DIR / job_id / "subtitles.srt"
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="SRT not found")
-
-    return FileResponse(
-        path,
-        media_type="application/x-subrip",
-        filename="subtitles.srt",
-    )
-
-
-@app.get("/download/{job_id}/json")
-def download_json(job_id: str):
-    path = RESULT_DIR / job_id / "segments.json"
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="JSON not found")
-
-    return FileResponse(
-        path,
-        media_type="application/json",
-        filename="segments.json",
-    )
-
-
-@app.get("/download/{job_id}/srt/{lang}")
-def download_translated_srt(job_id: str, lang: str):
-    path = RESULT_DIR / job_id / f"subtitles_{lang}.srt"
-
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="SRT translated not found")
-
-    return FileResponse(
-        path,
-        media_type="application/x-subrip",
-        filename=f"subtitles_{lang}.srt",
-    )
-
 @app.delete("/jobs/{job_id}")
 def delete_job(job_id: str):
     job_dir = RESULT_DIR / job_id
@@ -336,3 +277,57 @@ def delete_job(job_id: str):
             session.commit()
 
     return {"status": "deleted"}
+
+
+@app.get("/media/{job_id}")
+def media(job_id: str):
+    matches = list(UPLOAD_DIR.glob(f"{job_id}.*"))
+
+    if not matches:
+        raise HTTPException(status_code=404, detail="Media not found")
+
+    return FileResponse(matches[0])
+
+
+@app.get("/download/{job_id}/txt")
+def download_txt(job_id: str):
+    path = RESULT_DIR / job_id / "transcription.txt"
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="TXT not found")
+
+    return FileResponse(path, media_type="text/plain", filename="transcription.txt")
+
+
+@app.get("/download/{job_id}/srt")
+def download_srt(job_id: str):
+    path = RESULT_DIR / job_id / "subtitles.srt"
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="SRT not found")
+
+    return FileResponse(path, media_type="application/x-subrip", filename="subtitles.srt")
+
+
+@app.get("/download/{job_id}/json")
+def download_json(job_id: str):
+    path = RESULT_DIR / job_id / "segments.json"
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="JSON not found")
+
+    return FileResponse(path, media_type="application/json", filename="segments.json")
+
+
+@app.get("/download/{job_id}/srt/{lang}")
+def download_translated_srt(job_id: str, lang: str):
+    path = RESULT_DIR / job_id / f"subtitles_{lang}.srt"
+
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="SRT translated not found")
+
+    return FileResponse(
+        path,
+        media_type="application/x-subrip",
+        filename=f"subtitles_{lang}.srt",
+    )
