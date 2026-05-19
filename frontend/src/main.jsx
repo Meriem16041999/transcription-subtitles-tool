@@ -60,6 +60,7 @@ function HomePage() {
 }
 useEffect(() => {
   if (!job?.job_id) return;
+  if (job.status === 'Terminé' || job.status === 'Erreur') return;
 
   const interval = setInterval(async () => {
     const response = await fetch(`${API_URL}/jobs/${job.job_id}`);
@@ -67,12 +68,12 @@ useEffect(() => {
 
     setJob((previous) => ({
       ...previous,
-      status: data.status,
+      ...data,
     }));
-  }, 2000);
+  }, 5000);
 
   return () => clearInterval(interval);
-}, [job?.job_id]);
+}, [job?.job_id, job?.status]);
 
 useEffect(() => {
   loadJobs();
@@ -95,6 +96,19 @@ useEffect(() => {
     };
   });
 }
+
+async function deleteJob(jobId) {
+  const confirmed = window.confirm("Supprimer cet historique ?");
+  if (!confirmed) return;
+
+  await fetch(`${API_URL}/jobs/${jobId}`, {
+    method: "DELETE",
+  });
+
+  loadJobs();
+}
+
+
   async function saveEdits() {
   if (!jobId) return;
 
@@ -194,6 +208,9 @@ useEffect(() => {
             <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
             <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
             <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
+            <button type="button" onClick={() => deleteJob(item.job_id)}>
+  Supprimer
+</button>
           </div>
         </div>
       ))}
@@ -274,26 +291,7 @@ useEffect(() => {
             </div>
           </div>
         </form>
-        <section className="card">
-  <h2>Historique des projets</h2>
-
-  <div className="historyList">
-    {jobs.map((item) => (
-      <div key={item.job_id} className="historyItem">
-        <div>
-          <strong>{item.filename}</strong>
-          <p>{item.status} · {item.language || '—'} · {item.duration ? `${Math.round(item.duration)}s` : '—'}</p>
-        </div>
-
-        <div className="downloads">
-          <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
-          <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
-          <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
-        </div>
-      </div>
-    ))}
-  </div>
-</section>
+         
         {error && <p className="error">{error}</p>}
       </section>
 
@@ -304,6 +302,11 @@ useEffect(() => {
             <p className="jobStatus">
   Statut : {job.status}
 </p>
+{job.error && (
+  <p className="error">
+    Erreur : {job.error}
+  </p>
+)}
             <div className="downloads">
               <a href={`${API_URL}/download/${jobId}/txt`}>
                 <Download size={16} /> TXT

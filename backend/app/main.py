@@ -3,7 +3,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-
+import shutil
 from fastapi import BackgroundTasks, Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -111,18 +111,21 @@ def run_transcription_job(
                 session.commit()
 
     except Exception as exc:
-        JOBS[job_id] = {
-            "status": "Erreur",
-            "filename": filename,
-            "error": str(exc),
-        }
+     print("ERREUR JOB:", str(exc))
 
-        with get_session() as session:
-            job_db = session.get(Job, job_id)
-            if job_db:
-                job_db.status = "Erreur"
-                session.add(job_db)
-                session.commit()
+    JOBS[job_id] = {
+        "status": "Erreur",
+        "filename": filename,
+        "error": str(exc),
+    }
+
+    with get_session() as session:
+        job_db = session.get(Job, job_id)
+
+        if job_db:
+            job_db.status = "Erreur"
+            session.add(job_db)
+            session.commit()
 
 
 @app.get("/health")
@@ -156,8 +159,9 @@ def transcribe(
         shutil.copyfileobj(file.file, buffer)
 
     JOBS[job_id] = {
-        "status": "En attente",
-        "filename": filename,
+           "job_id": job_id,
+    "status": "En attente",
+    "filename": filename,
     }
 
     with get_session() as session:
@@ -310,3 +314,25 @@ def download_translated_srt(job_id: str, lang: str):
         media_type="application/x-subrip",
         filename=f"subtitles_{lang}.srt",
     )
+
+@app.delete("/jobs/{job_id}")
+def delete_job(job_id: str):
+    job_dir = RESULT_DIR / job_id
+
+    matches = list(UPLOAD_DIR.glob(f"{job_id}.*"))
+    for file_path in matches:
+        file_path.unlink(missing_ok=True)
+
+    if job_dir.exists():
+        shutil.rmtree(job_dir)
+
+    if job_id in JOBS:
+        del JOBS[job_id]
+
+    with get_session() as session:
+        job_db = session.get(Job, job_id)
+        if job_db:
+            session.delete(job_db)
+            session.commit()
+
+    return {"status": "deleted"}
