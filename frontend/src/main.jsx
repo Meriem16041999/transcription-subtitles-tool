@@ -10,8 +10,12 @@ const AVAILABLE_LANGUAGES = [
   { code: 'en', label: 'Anglais' },
   { code: 'es', label: 'Espagnol' },
   { code: 'ar', label: 'Arabe' },
+  { code: 'ro', label: 'Roumain' },
+  { code: 'ja', label: 'Japonais' },
+  { code: 'pl', label: 'Polonais' },
+  { code: 'it', label: 'Italien' },
+  { code: 'hi', label: 'Hindi' },
 ];
-
 function HomePage() {
   const [page, setPage] = useState('home');
   const [file, setFile] = useState(null);
@@ -78,14 +82,31 @@ useEffect(() => {
 useEffect(() => {
   loadJobs();
 }, []); 
-  function updateSegmentSpeaker(index, newSpeaker) {
-  setJob((previousJob) => {
-    const updatedSegments = [...previousJob.result.segments];
 
-    updatedSegments[index] = {
-      ...updatedSegments[index],
-      speaker: newSpeaker,
-    };
+async function openJob(jobId) {
+  const response = await fetch(`${API_URL}/jobs/${jobId}`);
+  const data = await response.json();
+
+  setJob(data);
+  setPage('home');
+  setSearchQuery('');
+}
+
+function updateSegmentSpeaker(originalIndex, newSpeaker) {
+  setJob((previousJob) => {
+    const oldSpeaker =
+      previousJob.result.segments[originalIndex].speaker || 'Speaker_0';
+
+    const updatedSegments = previousJob.result.segments.map((segment) => {
+      if ((segment.speaker || 'Speaker_0') === oldSpeaker) {
+        return {
+          ...segment,
+          speaker: newSpeaker,
+        };
+      }
+
+      return segment;
+    });
 
     return {
       ...previousJob,
@@ -205,15 +226,25 @@ async function deleteJob(jobId) {
             </p>
           </div>
 
+           
+
           <div className="downloads">
-            <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
-            <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
-            <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
-            <button type="button" onClick={() => deleteJob(item.job_id)}>
-  Supprimer
-</button>
+  <button type="button" onClick={() => openJob(item.job_id)}>
+    Ouvrir
+  </button>
+
+  <a href={`${API_URL}/download/${item.job_id}/txt`}>TXT</a>
+  <a href={`${API_URL}/download/${item.job_id}/srt`}>SRT</a>
+  <a href={`${API_URL}/download/${item.job_id}/json`}>JSON</a>
+
+  <button type="button" onClick={() => deleteJob(item.job_id)}>
+    Supprimer
+  </button>
+</div>
+         
+            
           </div>
-        </div>
+      
       ))}
     </div>
   </section>
@@ -243,13 +274,18 @@ async function deleteJob(jobId) {
           <div className="row">
             <label>
               Langue source
-              <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-                <option value="fr">Français</option>
-                <option value="en">Anglais</option>
-                <option value="ar">Arabe</option>
-                <option value="es">Espagnol</option>
-                <option value="auto">Auto</option>
-              </select>
+             <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+  <option value="fr">Français</option>
+  <option value="en">Anglais</option>
+  <option value="ar">Arabe</option>
+  <option value="es">Espagnol</option>
+  <option value="ro">Roumain</option>
+  <option value="ja">Japonais</option>
+  <option value="pl">Polonais</option>
+  <option value="it">Italien</option>
+  <option value="hi">Hindi</option>
+  <option value="auto">Auto</option>
+</select>
             </label>
 
             <button disabled={!file || loading} type="submit">
@@ -314,34 +350,7 @@ async function deleteJob(jobId) {
     Erreur : {job.error}
   </p>
 )}
-            <div className="downloads">
-              <a href={`${API_URL}/download/${jobId}/txt`}>
-                <Download size={16} /> TXT
-              </a>
-
-              <a href={`${API_URL}/download/${jobId}/srt`}>
-                <Download size={16} /> SRT original
-              </a>
-
-              <a href={`${API_URL}/download/${jobId}/json`}>
-                <Download size={16} /> JSON
-              </a>
-              
-
-              {Object.keys(translatedFiles).map((lang) => (
-                <a key={lang} href={`${API_URL}/download/${jobId}/srt/${lang}`}>
-                  <Download size={16} /> SRT {lang.toUpperCase()}
-                </a>
-              ))}
-
-              {Object.keys(dubFiles).map((lang) => (
-                <a key={lang} href={`${API_URL}/download/${jobId}/dub/${lang}`}>
-                  <Download size={16} /> Audio {lang.toUpperCase()}
-
-                </a>
-              ))}
-              <button onClick={saveEdits}>Sauvegarder corrections</button>
-            </div>
+            
           </div>
 
           {jobId && (
