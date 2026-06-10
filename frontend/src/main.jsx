@@ -4,7 +4,7 @@ import { Upload, FileText, Download } from 'lucide-react';
 import './styles.css';
  
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', label: 'Anglais' },
