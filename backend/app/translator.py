@@ -6,7 +6,14 @@ MODELS = {
     "ar": "Helsinki-NLP/opus-mt-fr-ar",
     "it": None,
     "en_it": "Helsinki-NLP/opus-mt-en-it",
-}
+    "en": "Helsinki-NLP/opus-mt-fr-en",
+    "es": "Helsinki-NLP/opus-mt-fr-es",
+    "ar": "Helsinki-NLP/opus-mt-fr-ar",
+    "it": "Helsinki-NLP/opus-mt-fr-it",
+    "pl": "Helsinki-NLP/opus-mt-fr-pl",
+    "ro": "Helsinki-NLP/opus-mt-fr-ro",
+     }
+
 
 _cache = {}
 

@@ -113,6 +113,9 @@ def run_transcription_job(
                 session.add(job_db)
                 session.commit()
 
+        if input_path.exists():
+            input_path.unlink()
+
     except Exception as exc:
         error_message = str(exc)
         print("ERREUR JOB:", error_message)
@@ -130,6 +133,9 @@ def run_transcription_job(
                 job_db.status = "Erreur"
                 session.add(job_db)
                 session.commit()
+
+        if input_path.exists():
+            input_path.unlink()
 
 
 @app.get("/health")
@@ -221,14 +227,27 @@ def get_job(job_id: str):
         if not job_db:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        return {
-            "job_id": job_db.id,
-            "filename": job_db.filename,
-            "status": job_db.status,
-            "duration": job_db.duration,
-            "language": job_db.language,
+    json_path = RESULT_DIR / job_id / "segments.json"
+
+    result = None
+    if json_path.exists():
+        segments = json.loads(json_path.read_text(encoding="utf-8"))
+        result = {
+            "segments": segments,
+            "json_file": str(json_path),
+            "txt_file": str(RESULT_DIR / job_id / "transcription.txt"),
+            "srt_file": str(RESULT_DIR / job_id / "subtitles.srt"),
+            "translated_files": {},
         }
 
+    return {
+        "job_id": job_id,
+        "filename": job_db.filename,
+        "status": job_db.status,
+        "duration": job_db.duration,
+        "language": job_db.language,
+        "result": result,
+    }
 
 @app.post("/jobs/{job_id}/update")
 def update_segments(job_id: str, segments: list = Body(...)):

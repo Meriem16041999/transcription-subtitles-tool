@@ -1,5 +1,14 @@
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20
+
 faster-whisper==1.1.1
-pydantic==2.10.4
+pyannote.audio
+transformers
+torch
+torchaudio
+
+sqlmodel>=0.0.38
+pydantic>=2.11.0
+requests
+sacremoses
