@@ -12,7 +12,7 @@ MODELS = {
     "it": "Helsinki-NLP/opus-mt-fr-it",
     "pl": "Helsinki-NLP/opus-mt-fr-pl",
     "ro": "Helsinki-NLP/opus-mt-fr-ro",
-     }
+      }
 
 
 _cache = {}
